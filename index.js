@@ -37,6 +37,17 @@ app.get('/services/feature', async(req, res) => {
     res.send(featuredData)
 })
 
+
+app.get('/services', async (req, res) => {
+    console.log("Received Query:", req.query);
+    const { category } = req.query;
+    const query = category ? { category, status: 'active' } : {status: 'active'};
+    const result = await services.find(query).toArray();
+    res.send(result);
+});
+
+
+
 app.listen(PORT, () => {
     console.log('Server is running at port', PORT)
 })
