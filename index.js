@@ -1,7 +1,7 @@
 import express from 'express'
 import 'dotenv/config'
 import cors from 'cors'
-import { MongoClient } from 'mongodb';
+import { MongoClient, ObjectId } from 'mongodb';
 
 const app = express()
 const PORT = process.env.PORT || 8000
@@ -45,6 +45,14 @@ app.get('/services', async (req, res) => {
     const result = await services.find(query).toArray();
     res.send(result);
 });
+
+app.get('/services/:id', async(req, res) => {
+    console.log('User Request for:', req.params.id)
+    const id = req.params.id
+    const singleData = await services.findOne({_id: new ObjectId(id)})
+    if(!singleData) return res.status(404).send({message: 'Data not found!'})
+    res.send(singleData)
+})
 
 
 
