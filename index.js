@@ -26,6 +26,7 @@ export async function connectToMongoDB() {
 const connectedClient = await connectToMongoDB()
 const database = connectedClient.db('salonbook-db')
 const services = database.collection('services')
+const appointments = database.collection('appointments')
 
 app.get('/', (req, res) => {
     res.send('Server is running')
@@ -52,6 +53,22 @@ app.get('/services/:id', async(req, res) => {
     const singleData = await services.findOne({_id: new ObjectId(id)})
     if(!singleData) return res.status(404).send({message: 'Data not found!'})
     res.send(singleData)
+})
+
+app.post('/appointments', async(req, res) => {
+    const data = req.body
+    const query = {
+        userId: data.userId,
+        serviceId: data.serviceId,
+        time: data.time,
+        date: data.date
+
+    }
+    const exists = await appointments.findOne(query)
+    console.log('exists', exists)
+    if(exists) return res.status(409).send({message: 'Appointment already booked in this time'})
+    const result = await appointments.insertOne(data)
+    res.send(result)
 })
 
 
