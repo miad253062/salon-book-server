@@ -23,6 +23,7 @@ export async function connectToMongoDB() {
 
 const connectedClient = await connectToMongoDB()
 const database = connectedClient.db('salonbook-db')
+const users = database.collection('user')
 const services = database.collection('services')
 const appointments = database.collection('appointments')
 const transactions = database.collection('transactions')
@@ -119,6 +120,33 @@ app.get('/transactions/session/:sessionId', async(req, res) => {
     })
     if (!transaction) return res.status(404).send({message: 'Transaction not found'})
     res.send({transaction})
+})
+
+
+app.get('/admin/overview', async(req, res)=> {
+    const totalCustomer = await users.countDocuments({role: 'customer'})
+    const totalService = await services.countDocuments({status: 'active'})
+    const totalAppointment = await appointments.countDocuments()
+    const totalPending = await appointments.countDocuments({status: 'pending'})
+    const totalConfirmed = await appointments.countDocuments({status: 'confirmed'})
+    const successfullPayment = await transactions.find({status: 'succeeded'}, {projection: {amount: 1}}).toArray()
+    console.log(successfullPayment)
+    const totalSuccessfullPayment = successfullPayment.length
+    const totalAmount = successfullPayment.reduce((acc, current) => { return current.amount + acc}, 0)
+    console.log(totalAmount)
+
+    const packed = {
+        totalCustomer, 
+        totalService, 
+        totalAppointment,
+        totalPending,
+        totalConfirmed,
+        payment: {
+            success: totalSuccessfullPayment,
+            totalAmount
+        }
+    }
+    res.send(packed)
 })
 
 app.listen(PORT, () => {
