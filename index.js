@@ -210,6 +210,45 @@ app.patch('/service/update/:id', async (req, res) => {
 });
 
 
+app.get('/admin/appointments', async (req, res) => {
+    try {
+        const result = await appointments.find({}).sort({ _id: -1 }).toArray();
+        res.send(result);
+    } catch (error) {
+        res.status(500).send({ message: 'Failed to fetch appointments' });
+    }
+});
+
+app.patch('/admin/confirm_appointment/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!ObjectId.isValid(id)) {
+            return res.status(400).send({ message: 'Invalid appointment ID!' });
+        }
+
+        const result = await appointments.updateOne(
+            { _id: new ObjectId(id), status: 'pending' },
+            {
+                $set: {
+                    status: 'confirmed',
+                    confirmedAt: new Date(),
+                },
+            }
+        );
+        if (result.matchedCount === 0) {
+            return res.status(404).send({
+                message: 'Pending appointment not found or already processed!',
+            });
+        }
+
+        res.send(result);
+    } catch (error) {
+        console.error('Error confirming appointment:', error);
+        res.status(500).send({ message: 'Failed to confirm appointment' });
+    }
+});
+
+
 app.post('/service/add', async (req, res) => {
     try {
         const {
@@ -252,6 +291,25 @@ app.post('/service/add', async (req, res) => {
         res.status(500).send({ message: 'Failed to add service' });
     }
 });
+
+
+app.get('/customer/overview/:email', async(req, res) => {
+    const {email} = req.params
+    const totalAppointmentByCustomer = await appointments.countDocuments({userEmail: email})
+    const pendingAppointment = await appointments.countDocuments({userEmail: email, status: 'pending'})
+    const confirmedAppointment = await appointments.countDocuments({userEmail: email, status: 'confirmed'})
+    const cancelledAppointment = await appointments.countDocuments({userEmail: email, status: 'canceled'})
+    const packed = {
+        totalAppointmentByCustomer,
+        pendingAppointment,
+        confirmedAppointment,
+        cancelledAppointment
+    }
+
+    res.send(packed)
+
+})
+
 
 
 
