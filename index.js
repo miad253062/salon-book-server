@@ -54,6 +54,41 @@ app.get('/services/:id', async(req, res) => {
     res.send(singleData)
 })
 
+app.get('/admin/services', async (req, res) => {
+    try {
+        const result = await services.find({}).toArray();
+        res.send(result);
+    } catch (error) {
+        res.status(500).send({ message: 'Failed to fetch all services' });
+    }
+});
+
+app.get('/admin/overview', async(req, res)=> {
+    const totalCustomer = await users.countDocuments({role: 'customer'})
+    const totalService = await services.countDocuments({status: 'active'})
+    const totalAppointment = await appointments.countDocuments()
+    const totalPending = await appointments.countDocuments({status: 'pending'})
+    const totalConfirmed = await appointments.countDocuments({status: 'confirmed'})
+    const successfullPayment = await transactions.find({status: 'succeeded'}, {projection: {amount: 1}}).toArray()
+    console.log(successfullPayment)
+    const totalSuccessfullPayment = successfullPayment.length
+    const totalAmount = successfullPayment.reduce((acc, current) => { return current.amount + acc}, 0)
+    console.log(totalAmount)
+
+    const packed = {
+        totalCustomer, 
+        totalService, 
+        totalAppointment,
+        totalPending,
+        totalConfirmed,
+        payment: {
+            success: totalSuccessfullPayment,
+            totalAmount
+        }
+    }
+    res.send(packed)
+})
+
 app.post('/appointments', async(req, res) => {
     const data = req.body
     const query = {
@@ -123,31 +158,102 @@ app.get('/transactions/session/:sessionId', async(req, res) => {
 })
 
 
-app.get('/admin/overview', async(req, res)=> {
-    const totalCustomer = await users.countDocuments({role: 'customer'})
-    const totalService = await services.countDocuments({status: 'active'})
-    const totalAppointment = await appointments.countDocuments()
-    const totalPending = await appointments.countDocuments({status: 'pending'})
-    const totalConfirmed = await appointments.countDocuments({status: 'confirmed'})
-    const successfullPayment = await transactions.find({status: 'succeeded'}, {projection: {amount: 1}}).toArray()
-    console.log(successfullPayment)
-    const totalSuccessfullPayment = successfullPayment.length
-    const totalAmount = successfullPayment.reduce((acc, current) => { return current.amount + acc}, 0)
-    console.log(totalAmount)
-
-    const packed = {
-        totalCustomer, 
-        totalService, 
-        totalAppointment,
-        totalPending,
-        totalConfirmed,
-        payment: {
-            success: totalSuccessfullPayment,
-            totalAmount
+app.delete('/service/delete/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!ObjectId.isValid(id)) {
+            return res.status(400).send({ message: 'Invalid service ID!' });
         }
+        const result = await services.deleteOne({ _id: new ObjectId(id) });
+        if (result.deletedCount === 0) {
+            return res.status(404).send({ message: 'Service not found!' });
+        }
+
+        res.send({ success: true, deletedCount: result.deletedCount });
+    } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: 'Failed to delete service' });
     }
-    res.send(packed)
-})
+});
+
+app.patch('/service/update/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!ObjectId.isValid(id)) {
+            return res.status(400).send({ message: 'Invalid service ID!' });
+        }
+
+        const { _id, ...updatedData } = req.body;
+        const result = await services.updateOne(
+            { _id: new ObjectId(id) },
+            {
+                $set: {
+                    ...updatedData,
+                    updatedAt: new Date(),
+                },
+            }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).send({ message: 'Service not found!' });
+        }
+
+        res.send({
+            success: true,
+            modifiedCount: result.modifiedCount,
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: 'Failed to update service' });
+    }
+});
+
+
+app.post('/service/add', async (req, res) => {
+    try {
+        const {
+            name,
+            category,
+            description,
+            price,
+            duration,
+            image,
+            status,
+            addedByName,
+            addedByEmail,
+            addedByRole
+        } = req.body;
+
+        const newService = {
+            name: name.trim(),
+            category: category.trim(),
+            description: description?.trim() || '',
+            price: parseInt(price, 10),
+            duration: parseInt(duration, 10),
+            image: image?.trim() || '',
+            status: status,
+            addedBy: {
+                name: addedByName,
+                email: addedByEmail,
+                role: addedByRole,
+            },
+            createdAt: new Date(),
+        };
+
+        const result = await services.insertOne(newService);
+
+        res.status(201).send({
+            success: true,
+            insertedId: result.insertedId,
+        });
+    } catch (error) {
+        console.error('Error adding service:', error);
+        res.status(500).send({ message: 'Failed to add service' });
+    }
+});
+
+
 
 app.listen(PORT, () => {
     console.log('Server is running at port', PORT)
