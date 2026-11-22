@@ -6,10 +6,8 @@ import { MongoClient, ObjectId } from 'mongodb';
 const app = express()
 const PORT = process.env.PORT || 8000
 
-
 app.use(express.json())
 app.use(cors());
-
 
 const client = new MongoClient(`mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@cluster0.eimgd93.mongodb.net/`);
 
@@ -27,6 +25,7 @@ const connectedClient = await connectToMongoDB()
 const database = connectedClient.db('salonbook-db')
 const services = database.collection('services')
 const appointments = database.collection('appointments')
+const transactions = database.collection('transactions')
 
 app.get('/', (req, res) => {
     res.send('Server is running')
@@ -37,7 +36,6 @@ app.get('/services/feature', async(req, res) => {
     const featuredData = await services.find(query).sort({price: -1}).limit(6).toArray()
     res.send(featuredData)
 })
-
 
 app.get('/services', async (req, res) => {
     console.log("Received Query:", req.query);
@@ -71,7 +69,57 @@ app.post('/appointments', async(req, res) => {
     res.send(result)
 })
 
+app.get('/users/:userid/appointment', async(req, res) => {
+    const {userid} = req.params
+    console.log(userid, 'requests for appointments data')
+    const query = {userId: userid}
+    const result = await appointments.find(query).toArray()
+    res.send(result)
+})
 
+app.patch('/appointments/:appointmentId/cancel', async(req, res) => {
+    const {appointmentId} = req.params
+    console.log('user wants to cancel the appointment', appointmentId)
+    const finddata = {_id : new ObjectId(appointmentId)}
+    const query = {$set: {status: 'canceled'}}
+    const result = await appointments.updateOne(finddata, query)
+    res.send(result)
+})
+
+app.patch('/appointments/:appointmentId/payment', async(req, res) => {
+    const {appointmentId} = req.params
+    if (!ObjectId.isValid(appointmentId)) return res.status(400).send({message: 'Invalid appointment id'})
+    console.log('payment confirmed for appointment', appointmentId)
+
+    const result = await appointments.updateOne(
+        {_id: new ObjectId(appointmentId), status: 'confirmed', paymentStatus: {$ne: 'paid'}},
+        {$set: {paymentStatus: 'paid', paidAt: new Date()}}
+    )
+
+    if (!result.matchedCount) return res.status(409).send({message: 'This appointment is not payable'})
+    res.send({success: true, modifiedCount: result.modifiedCount})
+})
+
+app.post('/transactions', async(req, res) => {
+    const data = req.body
+    if (!data.sessionId) return res.status(400).send({message: 'sessionId is required'})
+
+    const exists = await transactions.findOne({sessionId: data.sessionId})
+    if (exists) return res.send({success: true, duplicate: true, transactionId: exists._id})
+
+    const result = await transactions.insertOne({...data, createdAt: new Date()})
+    console.log('transaction saved', result.insertedId)
+    res.send({success: true, transactionId: result.insertedId})
+})
+
+app.get('/transactions/session/:sessionId', async(req, res) => {
+    const {sessionId} = req.params
+    const transaction = await transactions.findOne({
+        $or: [{sessionId}, {transactionId: sessionId}]
+    })
+    if (!transaction) return res.status(404).send({message: 'Transaction not found'})
+    res.send({transaction})
+})
 
 app.listen(PORT, () => {
     console.log('Server is running at port', PORT)
