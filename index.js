@@ -309,6 +309,50 @@ app.get('/customer/overview/:email', async(req, res) => {
     res.send(packed)
 
 })
+app.get('/admin/allusers', async(req, res) => {
+    const result = await users.find({}).toArray()
+    res.send(result)
+})
+
+
+app.patch('/admin/users/:userid/status', async (req, res) => {
+    try {
+        const { userid } = req.params;
+        const { isBlocked } = req.body;
+        const baseFilter = ObjectId.isValid(userid)
+            ? { $or: [{ _id: new ObjectId(userid) }, { id: userid }] }
+            : { id: userid };
+
+        const filter = isBlocked
+            ? { ...baseFilter, role: { $ne: 'admin' } }
+            : baseFilter;
+
+        const result = await users.updateOne(filter, {
+            $set: { isBlocked, updatedAt: new Date() },
+        });
+
+        if (result.matchedCount === 0) {
+            return res.status(404).send({
+                message: isBlocked
+                    ? 'User not found or cannot block an admin!'
+                    : 'User not found!',
+            });
+        }
+        res.send({
+            success: true,
+            isBlocked,
+            modifiedCount: result.modifiedCount,
+        });
+    } catch (error) {
+        console.error('Error updating user block status:', error);
+        res.status(500).send({ message: 'Failed to update user status' });
+    }
+});
+
+app.get('/admin/transactions', async(req, res) => {
+    const result = await transactions.find({}).toArray()
+    res.send(result)
+})
 
 
 
