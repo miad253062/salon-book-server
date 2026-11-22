@@ -360,3 +360,5 @@ app.get('/admin/transactions', async(req, res) => {
 app.listen(PORT, () => {
     console.log('Server is running at port', PORT)
 })
+
+export default app
