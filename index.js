@@ -7,7 +7,24 @@ const app = express()
 const PORT = process.env.PORT || 8000
 
 app.use(express.json())
-app.use(cors());
+
+const allowedOrigins = [
+    process.env.CLIENT_ORIGIN,
+    'https://salon-book-client-pjan.vercel.app',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+].filter(Boolean)
+
+app.use(cors({
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true)
+            return
+        }
+        callback(new Error('Origin not allowed by CORS'))
+    },
+    credentials: true,
+}))
 
 const client = new MongoClient(`mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@cluster0.eimgd93.mongodb.net/`);
 
